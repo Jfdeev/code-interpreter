@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
-from langchain_ollama import Ollama
+from langchain_ollama import ChatOllama
 from langchain.agents import create_react_agent, AgentExecutor
-from langchain_experimental import  PythonREPLTool
+from langchain_experimental.tools.python.tool import PythonREPLTool
 from langchain import hub
 
 load_dotenv()
@@ -14,15 +14,19 @@ def main():
                       Only use the output of your code to answer the question.
                       You might know the answer without running code, but you should still run code to get the answer.
                       If it does not seem like you can write code to answer the question, just return "I don't know" as the final answer."""
-    base_prompt = hub.pull("langchain-ai/react-agent-template")
-    prompt =  base_prompt.format(instructions=instructions)
-
-
+    
     tools = [PythonREPLTool()]
+    
+    base_prompt = hub.pull("langchain-ai/react-agent-template")
+    prompt = base_prompt.partial(
+        instructions=instructions,
+        tools="\n".join([f"{tool.name}: {tool.description}" for tool in tools]),
+        tool_names=", ".join([tool.name for tool in tools])
+    )
 
     agent = create_react_agent(
         prompt=prompt,
-        llm=Ollama(model="gemma3:1b", temperature=0),
+        llm=ChatOllama(model="gemma2:2b", temperature=0),
         tools=tools,
     )
 
