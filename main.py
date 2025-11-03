@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 from langchain_ollama import ChatOllama
 from langchain.agents import create_react_agent, AgentExecutor
 from langchain_experimental.tools.python.tool import PythonREPLTool
+from langchain_experimental.agents import create_csv_agent
 from langchain import hub
 
 load_dotenv()
@@ -33,12 +34,26 @@ def main():
     agent_executor = AgentExecutor.from_agent_and_tools(agent=agent, tools=tools, verbose=True)
 
 
-    agent_executor.invoke(
-        input={
-            "input": """Generate and save in current working directory 15 QRcodes
-                        that point to www.udemy.com/course/langchain, you have qrcode package installed already.
-            """
-        }
+    #agent_executor.invoke(
+    #    input={
+    #        "input": """Generate and save in current working directory 15 QRcodes
+    #                    that point to www.udemy.com/course/langchain, you have qrcode package installed already.
+    #        """
+    #    }
+    #)
+
+    csv_agent = create_csv_agent(
+        llm=ChatOllama(model="gemma2:2b", temperature=0),
+        path="USA_Housing.csv",
+        verbose=True,
+        allow_dangerous_code=True
+    )
+
+    csv_agent.invoke(
+        input={"input": """
+            which variables have the highest and lowest correlation in file USA_Housing.csv?
+            if you recieve an string error (ValueError: could not convert string to float), you need .  
+            """}
     )
 
 
