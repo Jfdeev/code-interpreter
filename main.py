@@ -33,55 +33,73 @@ def main():
 
     agent_executor = AgentExecutor.from_agent_and_tools(agent=agent, tools=tools, verbose=True)
 
-
-    #agent_executor.invoke(
-    #    input={
-    #        "input": """Generate and save in current working directory 15 QRcodes
-    #                    that point to www.udemy.com/course/langchain, you have qrcode package installed already.
-    #        """
-    #    }
-    #)
-
     csv_agent: AgentExecutor = create_csv_agent(
         llm=ChatOllama(model="gemma2:2b", temperature=0),
         path="USA_Housing.csv",
         verbose=True,
-        allow_dangerous_code=True
+        allow_dangerous_code=True,
+        max_iterations=10,
+        prefix="""You are working with a pandas dataframe in Python. The dataframe is called 'df'.
+        
+IMPORTANT: The columns in this CSV are:
+- 'Avg. Area Income'
+- 'Avg. Area House Age' 
+- 'Avg. Area Number of Rooms'
+- 'Avg. Area Number of Bedrooms'
+- 'Area Population'
+- 'Price'
+- 'Address'
+
+ALWAYS use df.columns to check column names FIRST before using them.
+When filtering by bedrooms, use the column 'Avg. Area Number of Bedrooms'.
+"""
     )
 
-    #csv_agent.invoke(
-    #    input={"input": """
-    #        Analyze the USA_Housing.csv file and find which NUMERIC variables have the highest and lowest correlation.
-    #        
-    #        IMPORTANT INSTRUCTIONS:
-    #        1. First, use df.select_dtypes(include=['number']) to get ONLY numeric columns
-    #        2. Then use df.corr() on the numeric data only
-    #        3. Find the highest and lowest correlation pairs (excluding diagonal values which are 1.0)
-    #        4. DO NOT try to calculate correlation on string columns like Address
-    #        
-    #        Example code structure:
-    #        import pandas as pd
-    #        df = pd.read_csv('USA_Housing.csv')
-    #        numeric_df = df.select_dtypes(include=['number'])
-    #        correlation = numeric_df.corr()
-    #        # Then find highest and lowest correlations
-    #        """}
-    #)
+    def python_agent_wrapper(question: str) -> str:
+        result = agent_executor.invoke({"input": question})
+        return result.get("output", str(result))
+    
+    def csv_agent_wrapper(question: str) -> str:
+        result = csv_agent.invoke({"input": question})
+        return result.get("output", str(result))
 
     tools = [
         Tool(
-            name="Python Agent",
-            func=agent_executor.invoke,
-            description="Useful for when you need to transform normal language to python and execute python code, returning the results of execution. DOES NOT ACCEPT CODE AS INPUT."
+            name="Python_Agent",
+            func=python_agent_wrapper,
+            description="Useful for when you need to transform natural language to python and execute python code, returning the results of execution. Input should be a natural language question or task. DOES NOT ACCEPT CODE AS INPUT."
         ),
         Tool(
-            name="CSV Agent",
-            func=csv_agent.invoke,
+            name="CSV_Agent",
+            func=csv_agent_wrapper,
             description="Useful for when you need to analyze and answer questions about data in a CSV file. Input should be a question about the data in the CSV."
         )
     ]
 
+    prompt = base_prompt.partial(instructions="")
+    router_agent = create_react_agent(
+        prompt=prompt,
+        llm=ChatOllama(model="gemma2:2b", temperature=0),
+        tools=tools,
+    )
 
+    router_agent_executor = AgentExecutor.from_agent_and_tools(agent=router_agent, tools=tools, verbose=True)
+
+    print(
+        router_agent_executor.invoke(
+            {
+                "input": "Using the USA_Housing.csv file, what is the average 'Price' of houses with more than 3 bedrooms?"
+            }
+        )
+    )
+
+    print(
+        router_agent_executor.invoke(
+            {
+                "input": "Generate a list of the first 10 Fibonacci numbers and calculate their sum."
+            }
+        )
+    )
 
 if __name__ == "__main__":
     main()
